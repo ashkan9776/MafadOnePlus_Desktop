@@ -24,6 +24,10 @@ class AdbService extends ChangeNotifier {
   static const String targetPackage = 'ir.akhtardanesh.mafadoneplus';
   static const String targetReceiver =
       'ir.akhtardanesh.mafadoneplus/.MyDeviceAdminReceiver';
+  static const String targetClearReceiver =
+      'ir.akhtardanesh.mafadoneplus/.ClearDeviceOwnerReceiver';
+  static const String targetClearAction =
+      'ir.akhtardanesh.mafadoneplus.ACTION_REMOVE_DEVICE_OWNER';
 
   String? _customAdbPath;
   String _effectiveAdbPath = 'adb';
@@ -483,10 +487,24 @@ class AdbService extends ChangeNotifier {
   }
 
   /// Removes active admin / device owner:
-  /// `adb shell dpm remove-active-admin ir.akhtardanesh.mafadoneplus/.MyDeviceAdminReceiver`
+  /// Uses in-app broadcast first (clean clearance) followed by dpm remove-active-admin
   Future<AdbActionResult> removeDeviceAdmin(String serial) async {
     _setBusy(true, 'در حال لغو دسترسی ادمین / Device Owner...');
     try {
+      // 1. Send in-app broadcast first to clear Device Owner via Android API (dpm.clearDeviceOwnerApp)
+      await runAdb([
+        'shell',
+        'am',
+        'broadcast',
+        '-a',
+        targetClearAction,
+        '-n',
+        targetClearReceiver,
+      ], deviceSerial: serial);
+
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      // 2. Remove active admin via DPM command
       final res = await runAdb(
         ['shell', 'dpm', 'remove-active-admin', targetReceiver],
         deviceSerial: serial,
@@ -494,15 +512,21 @@ class AdbService extends ChangeNotifier {
 
       final output = (res.stdout.toString() + res.stderr.toString()).trim();
 
-      if (output.contains('Success') ||
+      await refreshDevices();
+      final currentDev = _selectedDevice;
+      final bool isCleared = currentDev == null ||
+          (!currentDev.isDeviceOwner && !currentDev.isActiveAdmin);
+
+      if (isCleared ||
+          output.contains('Success') ||
+          output.contains('not an active admin') ||
           res.exitCode == 0 ||
           output.isEmpty) {
         _addLog(
           'لغو دسترسی ادمین',
-          'دسترسی ادمین برنامه با موفقیت سلب شد.',
+          'دسترسی ادمین و Device Owner با موفقیت از برنامه سلب و آزاد شد.',
           LogType.success,
         );
-        await refreshDevices();
         return AdbActionResult(
           success: true,
           title: 'سلب دسترسی موفق بود',
@@ -511,24 +535,24 @@ class AdbService extends ChangeNotifier {
         );
       }
 
-      if (output.contains('not an active admin')) {
-        await refreshDevices();
+      if (output.contains('SecurityException') ||
+          output.contains('non-test admin')) {
         return AdbActionResult(
-          success: true,
-          title: 'برنامه ادمین نیست',
-          message: 'این برنامه در حال حاضر ادمین فعال این دستگاه نیست.',
+          success: false,
+          title: 'محدودیت امنیتی اندروید',
+          message:
+              'برای سلب دسترسی در نسخه‌های نهایی، برنامه باید نسخه آپدیت شده حاوی گیرنده سلب داخلی باشد.',
           rawOutput: output,
+          troubleshootingTip:
+              'لطفاً نسخه جدید برنامه (که حاوی گیرنده حذف است) را نصب کنید تا سلب دسترسی با یک کلیک انجام شود.',
         );
       }
 
       return AdbActionResult(
         success: false,
         title: 'عدم امکان سلب دسترسی',
-        message:
-            'در صورت فعال بودن دائمی Device Owner، اندروید ممکن است اجازه سلب مستقیم ندهد: $output',
+        message: 'خروجی: $output',
         rawOutput: output,
-        troubleshootingTip:
-            'در برخی نسخه‌های اندروید، Device Owner تنها از طریق خود اپلیکیشن یا فکتوری ریست حذف می‌شود.',
       );
     } catch (e) {
       return AdbActionResult(
@@ -612,6 +636,18 @@ class AdbService extends ChangeNotifier {
   Future<AdbActionResult> uninstallApp(String serial) async {
     _setBusy(true, 'در حال حذف برنامه از گوشی...');
     try {
+      // First ensure device owner & admin are cleared so DELETE_FAILED_DEVICE_POLICY_MANAGER never happens
+      await runAdb([
+        'shell',
+        'am',
+        'broadcast',
+        '-a',
+        targetClearAction,
+        '-n',
+        targetClearReceiver,
+      ], deviceSerial: serial);
+      await Future.delayed(const Duration(milliseconds: 500));
+
       final res = await runAdb(['uninstall', targetPackage], deviceSerial: serial);
       final output = (res.stdout.toString() + res.stderr.toString()).trim();
       await refreshDevices();

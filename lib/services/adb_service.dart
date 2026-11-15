@@ -487,11 +487,11 @@ class AdbService extends ChangeNotifier {
   }
 
   /// Removes active admin / device owner:
-  /// Uses in-app broadcast first (clean clearance) followed by dpm remove-active-admin
+  /// Uses in-app broadcast first (clean clearance) and checks status before fallback
   Future<AdbActionResult> removeDeviceAdmin(String serial) async {
     _setBusy(true, 'در حال لغو دسترسی ادمین / Device Owner...');
     try {
-      // 1. Send in-app broadcast first to clear Device Owner via Android API (dpm.clearDeviceOwnerApp)
+      // 1. Send in-app broadcast first to clear Device Owner via Android API (dpm.clearDeviceOwnerApp & removeActiveAdmin)
       await runAdb([
         'shell',
         'am',
@@ -502,9 +502,29 @@ class AdbService extends ChangeNotifier {
         targetClearReceiver,
       ], deviceSerial: serial);
 
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 700));
 
-      // 2. Remove active admin via DPM command
+      // 2. Check if already cleared by the in-app broadcast
+      await refreshDevices();
+      var currentDev = _selectedDevice;
+      bool isCleared = currentDev == null ||
+          (!currentDev.isDeviceOwner && !currentDev.isActiveAdmin);
+
+      if (isCleared) {
+        _addLog(
+          'لغو موفقیت‌آمیز',
+          'دسترسی مالکیت دستگاه (Device Owner) و ادمین با موفقیت سلب و آزاد شد.',
+          LogType.success,
+        );
+        return AdbActionResult(
+          success: true,
+          title: 'سلب دسترسی موفق بود',
+          message: 'دسترسی ادمین و Device Owner با موفقیت از برنامه برداشته شد.',
+          rawOutput: 'Device Owner and Admin successfully cleared via in-app handler.',
+        );
+      }
+
+      // 3. Fallback only if not cleared (e.g. older app version without the broadcast receiver)
       final res = await runAdb(
         ['shell', 'dpm', 'remove-active-admin', targetReceiver],
         deviceSerial: serial,
@@ -513,8 +533,8 @@ class AdbService extends ChangeNotifier {
       final output = (res.stdout.toString() + res.stderr.toString()).trim();
 
       await refreshDevices();
-      final currentDev = _selectedDevice;
-      final bool isCleared = currentDev == null ||
+      currentDev = _selectedDevice;
+      isCleared = currentDev == null ||
           (!currentDev.isDeviceOwner && !currentDev.isActiveAdmin);
 
       if (isCleared ||

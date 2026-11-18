@@ -67,6 +67,7 @@ flutter:
     - assets/apk/
     - assets/fonts/
     - assets/images/
+    - assets/platform-tools-windows/
 
   fonts:
     - family: Vazirmatn

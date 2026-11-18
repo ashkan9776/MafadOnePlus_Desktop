@@ -26,6 +26,11 @@ if %errorlevel% neq 0 (
 )
 
 echo.
+echo 4. Copying portable platform-tools (adb.exe)...
+if not exist "build\windows\x64\runner\Release\platform-tools" mkdir "build\windows\x64\runner\Release\platform-tools"
+xcopy /E /I /Y "assets\platform-tools-windows\*" "build\windows\x64\runner\Release\platform-tools\"
+
+echo.
 echo ========================================================
 echo   BUILD COMPLETED SUCCESSFULLY!
 echo   Output folder: build\windows\x64\runner\Release\

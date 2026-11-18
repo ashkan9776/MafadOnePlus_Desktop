@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import '../models/device_info.dart';
 import '../models/log_entry.dart';
 
@@ -115,19 +116,39 @@ class AdbService extends ChangeNotifier {
       candidates.add(_customAdbPath!);
     }
 
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final currentDir = Directory.current.path;
+
     if (Platform.isWindows) {
-      // Local windows platform tools
+      // 1. In platform-tools directory next to executable (bundled in release zip)
+      candidates.add(p.join(exeDir, 'platform-tools', 'adb.exe'));
+      candidates.add(p.join(exeDir, 'adb.exe'));
+
+      // 2. In Flutter assets directory
+      candidates.add(p.join(
+          exeDir, 'data', 'flutter_assets', 'assets', 'platform-tools-windows', 'adb.exe'));
+
+      // 3. In current working directory
+      candidates.add(p.join(currentDir, 'platform-tools', 'adb.exe'));
+      candidates.add(p.join(
+          currentDir, 'assets', 'platform-tools-windows', 'adb.exe'));
       candidates.add(r'assets\platform-tools-windows\adb.exe');
       candidates.add(r'platform-tools\adb.exe');
+
+      // 4. In Android SDK (%LOCALAPPDATA%\Android\Sdk\platform-tools)
       final localAppData = Platform.environment['LOCALAPPDATA'];
-      if (localAppData != null) {
+      if (localAppData != null && localAppData.isNotEmpty) {
         candidates.add(
-            '$localAppData\\Android\\Sdk\\platform-tools\\adb.exe');
+            p.join(localAppData, 'Android', 'Sdk', 'platform-tools', 'adb.exe'));
       }
+
+      // 5. System PATH
       candidates.add('adb.exe');
     } else {
       // Linux / macOS
       final home = Platform.environment['HOME'] ?? '';
+      candidates.add(p.join(exeDir, 'platform-tools', 'adb'));
+      candidates.add(p.join(exeDir, 'adb'));
       candidates.add('/usr/bin/adb');
       candidates.add('$home/Android/Sdk/platform-tools/adb');
       candidates.add('/usr/local/bin/adb');

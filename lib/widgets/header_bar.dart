@@ -32,22 +32,27 @@ class HeaderBar extends StatelessWidget {
         children: [
           // App Logo and Title
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 46,
+            height: 46,
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
+              color: AppTheme.surfaceLight,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.primary.withOpacity(0.4),
+                width: 1.5,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.3),
+                  color: AppTheme.primary.withOpacity(0.2),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: const Icon(
-              Icons.shield_rounded,
-              color: Colors.black87,
-              size: 26,
+            child: Image.asset(
+              'assets/images/app_logo.png',
+              fit: BoxFit.contain,
             ),
           ),
           const SizedBox(width: 14),

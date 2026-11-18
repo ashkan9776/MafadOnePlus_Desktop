@@ -44,6 +44,7 @@ jobs:
         with:
           name: MafadOnePlus-Windows-Release
           path: MafadOnePlus_Windows_Release.zip
+          if-no-files-found: error
 
   build-linux:
     runs-on: ubuntu-latest
@@ -73,14 +74,15 @@ jobs:
 
       - name: Package Linux Bundle
         run: |
-          cd build/linux/x64/release/bundle/
-          zip -r ../../../../MafadOnePlus_Linux_Release.zip .
+          cd build/linux/x64/release/bundle
+          zip -r "${GITHUB_WORKSPACE}/MafadOnePlus_Linux_Release.zip" .
 
       - name: Upload Linux Executable Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MafadOnePlus-Linux-Release
           path: MafadOnePlus_Linux_Release.zip
+          if-no-files-found: error
 
   publish-release:
     needs: [build-windows, build-linux]
@@ -90,11 +92,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: MafadOnePlus-Windows-Release
+          path: release-assets
 
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
           name: MafadOnePlus-Linux-Release
+          path: release-assets
+
+      - name: List downloaded files
+        run: ls -la release-assets
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
@@ -110,7 +117,7 @@ jobs:
             - **`MafadOnePlus_Windows_Release.zip`**: نسخه کامل و پرتابل ویندوز (شامل adb.exe پرتابل و بدون نیاز به نصب هیچ پیش‌نیازی)
             - **`MafadOnePlus_Linux_Release.zip`**: نسخه کامل و مستقل لینوکس (x64)
           files: |
-            MafadOnePlus_Windows_Release.zip
-            MafadOnePlus_Linux_Release.zip
+            release-assets/MafadOnePlus_Windows_Release.zip
+            release-assets/MafadOnePlus_Linux_Release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
